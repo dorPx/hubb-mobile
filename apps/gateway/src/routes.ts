@@ -103,6 +103,14 @@ router.get("/sessions/:id", requireAuth, async (req, res, next) => {
   }
 });
 
+router.get("/sessions/:id/transcript", requireAuth, async (req, res, next) => {
+  try {
+    res.json(await upstream.getTranscript(req.params.id));
+  } catch (e) {
+    next(e);
+  }
+});
+
 router.get("/models", requireAuth, async (_req, res, next) => {
   try {
     res.json(await upstream.listModels());

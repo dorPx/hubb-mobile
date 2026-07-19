@@ -6,6 +6,15 @@ import { config } from "./config.js";
 import { router } from "./routes.js";
 
 const app = express();
+// Permissive CORS: auth is bearer-token (no cookies), and native clients
+// ignore CORS entirely — this exists for web/dev builds of the client.
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, Last-Event-ID");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 app.use(express.json({ limit: "1mb" }));
 app.use("/v1", router);
 

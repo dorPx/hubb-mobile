@@ -1,0 +1,23 @@
+{
+  "name": "@hermes-mobile/ui",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@hermes-mobile/shared": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "typescript": "~5.9.2"
+  }
+}

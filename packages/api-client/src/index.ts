@@ -42,13 +42,21 @@ export interface EventStreamHandle {
   done: Promise<void>;
 }
 
+export interface TranscriptMessage {
+  role: "user" | "assistant";
+  text: string;
+  thinking?: string;
+  ts: number;
+}
+
 export class GatewayClient {
   private baseUrl: string;
   private fetchImpl: FetchLike;
 
   constructor(private opts: GatewayClientOptions) {
     this.baseUrl = opts.baseUrl.replace(/\/$/, "");
-    this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+    // bind: an unbound window.fetch throws "Illegal invocation" on web
+    this.fetchImpl = opts.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
   // ----------------------------------------------------------------- core
@@ -135,6 +143,28 @@ export class GatewayClient {
           available: z.boolean(),
         }),
       ),
+    );
+  }
+
+  transcript(sessionId: string): Promise<TranscriptMessage[]> {
+    return this.request(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/transcript`,
+      z.array(
+        z.object({
+          role: z.enum(["user", "assistant"]),
+          text: z.string(),
+          thinking: z.string().optional(),
+          ts: z.number(),
+        }),
+      ),
+    );
+  }
+
+  setSessionModel(sessionId: string, model: string): Promise<{ ok: boolean }> {
+    return this.request(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/model`,
+      z.object({ ok: z.boolean() }),
+      { method: "PUT", body: JSON.stringify({ model }) },
     );
   }
 

@@ -65,10 +65,35 @@ export async function listSessions(): Promise<SessionSummary[]> {
 }
 
 export async function getSession(id: string): Promise<SessionSummary> {
-  const data = await up<UpstreamSession>(
+  const data = await up<{ session?: UpstreamSession } & UpstreamSession>(
     `/api/session?session_id=${encodeURIComponent(id)}&messages=0&resolve_model=0`,
   );
-  return toSummary({ ...data, session_id: data.session_id || id });
+  const s = data.session ?? data;
+  return toSummary({ ...s, session_id: s.session_id || id });
+}
+
+export interface TranscriptMessage {
+  role: "user" | "assistant";
+  text: string;
+  thinking?: string;
+  ts: number;
+}
+
+/** Full transcript from the upstream store — covers turns that ran before
+ * this gateway existed (desktop CLI/WebUI history shows up on mobile). */
+export async function getTranscript(id: string): Promise<TranscriptMessage[]> {
+  type Msg = { role: string; content?: string; reasoning?: string; timestamp?: number };
+  const data = await up<{ messages?: Msg[]; session?: { messages?: Msg[] } }>(
+    `/api/session?session_id=${encodeURIComponent(id)}&messages=1&resolve_model=0`,
+  );
+  return (data.session?.messages ?? data.messages ?? [])
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({
+      role: m.role as "user" | "assistant",
+      text: String(m.content ?? ""),
+      thinking: m.reasoning ? String(m.reasoning) : undefined,
+      ts: Math.round((m.timestamp ?? 0) * 1000),
+    }));
 }
 
 export async function createSession(title?: string): Promise<SessionSummary> {
