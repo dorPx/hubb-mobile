@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.turbo/
+.expo/
+*.log
+.env
+.env.*
+!.env.example
+upstream/
+data/
+*.db
+*.db-journal
