@@ -42,6 +42,53 @@ export interface EventStreamHandle {
   done: Promise<void>;
 }
 
+const dirEntrySchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  type: z.enum(["dir", "file"]),
+  size: z.number().nullable(),
+});
+export type DirEntry = z.infer<typeof dirEntrySchema>;
+
+const cronJobSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  prompt: z.string(),
+  schedule: z.string(),
+  paused: z.boolean(),
+  provider: z.string().nullable(),
+  model: z.string().nullable(),
+  lastRunAt: z.number().nullable(),
+  lastStatus: z.string().nullable(),
+});
+export type CronJob = z.infer<typeof cronJobSchema>;
+
+const skillInfoSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  category: z.string().nullable(),
+  disabled: z.boolean(),
+});
+export type SkillInfo = z.infer<typeof skillInfoSchema>;
+
+const insightsSchema = z.object({
+  upstreamReachable: z.boolean(),
+  activeStreams: z.number(),
+  health: z.record(z.string(), z.unknown()).nullable(),
+  skillsUsage: z.array(z.object({ name: z.string(), uses: z.number() })),
+  sessionCount: z.number().nullable(),
+});
+export type Insights = z.infer<typeof insightsSchema>;
+
+const sessionUsageSchema = z.object({
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  totalTokens: z.number(),
+  estimatedCost: z.number(),
+  model: z.string().nullable(),
+});
+export type SessionUsage = z.infer<typeof sessionUsageSchema>;
+
 export interface TranscriptMessage {
   role: "user" | "assistant";
   text: string;
@@ -174,6 +221,59 @@ export class GatewayClient {
       z.object({ accepted: z.boolean() }),
       { method: "POST", body: JSON.stringify(req) },
     );
+  }
+
+  // ---------------------------------------------------------- milestone 2
+
+  searchSessions(q: string): Promise<SessionSummary[]> {
+    return this.request(`/v1/search?q=${encodeURIComponent(q)}`, z.array(sessionSummarySchema));
+  }
+
+  workspaces(): Promise<{ path: string; name: string }[]> {
+    return this.request("/v1/workspaces", z.array(z.object({ path: z.string(), name: z.string() })));
+  }
+
+  listDir(path: string): Promise<DirEntry[]> {
+    return this.request(`/v1/files?path=${encodeURIComponent(path)}`, z.array(dirEntrySchema));
+  }
+
+  readFile(path: string): Promise<{ path: string; content: string; truncated: boolean }> {
+    return this.request(
+      `/v1/file?path=${encodeURIComponent(path)}`,
+      z.object({ path: z.string(), content: z.string(), truncated: z.boolean() }),
+    );
+  }
+
+  tasks(): Promise<CronJob[]> {
+    return this.request("/v1/tasks", z.array(cronJobSchema));
+  }
+
+  taskAction(id: string, action: "pause" | "resume" | "run"): Promise<{ ok: boolean }> {
+    return this.request(
+      `/v1/tasks/${encodeURIComponent(id)}/${action}`,
+      z.object({ ok: z.boolean() }),
+      { method: "POST", body: "{}" },
+    );
+  }
+
+  skills(): Promise<SkillInfo[]> {
+    return this.request("/v1/skills", z.array(skillInfoSchema));
+  }
+
+  toggleSkill(name: string, disabled: boolean): Promise<{ ok: boolean }> {
+    return this.request(
+      `/v1/skills/${encodeURIComponent(name)}/toggle`,
+      z.object({ ok: z.boolean() }),
+      { method: "POST", body: JSON.stringify({ disabled }) },
+    );
+  }
+
+  sessionUsage(id: string): Promise<SessionUsage> {
+    return this.request(`/v1/sessions/${encodeURIComponent(id)}/usage`, sessionUsageSchema);
+  }
+
+  insights(): Promise<Insights> {
+    return this.request("/v1/insights", insightsSchema);
   }
 
   /** Replay persisted events after `afterSeq` (catch-up without a live stream). */

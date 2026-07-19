@@ -225,3 +225,162 @@ async function tailStream(sessionId: string, streamId: string): Promise<void> {
     activeStreams.delete(sessionId);
   }
 }
+
+// ------------------------------------------------------------- milestone 2
+
+export async function searchSessions(q: string): Promise<SessionSummary[]> {
+  const data = await up<{ sessions: UpstreamSession[] }>(
+    `/api/sessions/search?q=${encodeURIComponent(q)}`,
+  );
+  return (data.sessions || []).map(toSummary);
+}
+
+export async function listWorkspaces(): Promise<{ path: string; name: string }[]> {
+  const data = await up<{ workspaces?: { path: string; name: string }[] }>("/api/workspaces");
+  return data.workspaces ?? [];
+}
+
+export interface DirEntry {
+  name: string;
+  path: string;
+  type: "dir" | "file";
+  size: number | null;
+}
+
+// Upstream file APIs are session-scoped; any real session id satisfies the guard.
+function anySessionId(): Promise<string> {
+  return listSessions().then((s) => {
+    if (!s.length) throw new Error("no sessions exist yet");
+    return s[0].id;
+  });
+}
+
+export async function listDir(path: string): Promise<DirEntry[]> {
+  const sid = await anySessionId();
+  const data = await up<{ entries?: DirEntry[] }>(
+    `/api/list?path=${encodeURIComponent(path)}&session_id=${encodeURIComponent(sid)}`,
+  );
+  return (data.entries ?? []).map((e) => ({ name: e.name, path: e.path, type: e.type, size: e.size ?? null }));
+}
+
+export async function readFile(path: string): Promise<{ path: string; content: string; truncated: boolean }> {
+  const sid = await anySessionId();
+  const res = await fetch(
+    `${config.upstreamUrl}/api/file?path=${encodeURIComponent(path)}&session_id=${encodeURIComponent(sid)}`,
+    { signal: AbortSignal.timeout(15000) },
+  );
+  if (!res.ok) throw new Error(`upstream /api/file: HTTP ${res.status}`);
+  const body = (await res.json()) as { content?: string; text?: string; truncated?: boolean };
+  const content = String(body.content ?? body.text ?? "");
+  return { path, content: content.slice(0, 200_000), truncated: !!body.truncated || content.length > 200_000 };
+}
+
+export interface CronJob {
+  id: string;
+  name: string;
+  prompt: string;
+  schedule: string;
+  paused: boolean;
+  provider: string | null;
+  model: string | null;
+  lastRunAt: number | null;
+  lastStatus: string | null;
+}
+
+export async function listCrons(): Promise<CronJob[]> {
+  type Raw = {
+    id: string; name?: string; prompt?: string; cron?: string;
+    schedule?: string | { display?: string; expr?: string };
+    paused?: boolean; enabled?: boolean; provider_snapshot?: string | null; model_snapshot?: string | null;
+    last_run_at?: number | null; last_status?: string | null; last_run?: string | null;
+  };
+  const data = await up<{ jobs?: Raw[] }>("/api/crons");
+  return (data.jobs ?? []).map((j) => ({
+    id: j.id,
+    name: j.name || "Unnamed job",
+    prompt: j.prompt || "",
+    schedule:
+      typeof j.schedule === "string"
+        ? j.schedule
+        : (j.schedule?.display ?? j.schedule?.expr ?? j.cron ?? ""),
+    paused: j.paused ?? j.enabled === false,
+    provider: j.provider_snapshot ?? null,
+    model: j.model_snapshot ?? null,
+    lastRunAt: j.last_run_at ? Math.round(j.last_run_at * 1000) : null,
+    lastStatus: j.last_status ?? j.last_run ?? null,
+  }));
+}
+
+export async function cronAction(id: string, action: "pause" | "resume" | "run"): Promise<void> {
+  await up(`/api/crons/${action}`, { method: "POST", body: JSON.stringify({ id, job_id: id }) });
+}
+
+export async function cronHistory(id: string): Promise<{ at: number; status: string; summary: string }[]> {
+  type Raw = { started_at?: number; at?: number; status?: string; summary?: string; output?: string };
+  const data = await up<{ history?: Raw[]; runs?: Raw[] }>(
+    `/api/crons/history?id=${encodeURIComponent(id)}&job_id=${encodeURIComponent(id)}`,
+  );
+  return (data.history ?? data.runs ?? []).map((r) => ({
+    at: Math.round((r.started_at ?? r.at ?? 0) * 1000),
+    status: r.status ?? "unknown",
+    summary: String(r.summary ?? r.output ?? "").slice(0, 500),
+  }));
+}
+
+export interface SkillInfo {
+  name: string;
+  description: string;
+  category: string | null;
+  disabled: boolean;
+}
+
+export async function listSkills(): Promise<SkillInfo[]> {
+  const data = await up<{ skills?: SkillInfo[] }>("/api/skills");
+  return (data.skills ?? []).map((s) => ({
+    name: s.name,
+    description: s.description || "",
+    category: s.category ?? null,
+    disabled: !!s.disabled,
+  }));
+}
+
+export async function toggleSkill(name: string, disabled: boolean): Promise<void> {
+  await up("/api/skills/toggle", { method: "POST", body: JSON.stringify({ name, disabled }) });
+}
+
+export interface SessionUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+  model: string | null;
+}
+
+export async function sessionUsage(id: string): Promise<SessionUsage> {
+  const d = await up<{
+    input_tokens?: number; output_tokens?: number; total_tokens?: number;
+    estimated_cost?: number; model?: string;
+  }>(`/api/session/usage?session_id=${encodeURIComponent(id)}`);
+  return {
+    inputTokens: d.input_tokens ?? 0,
+    outputTokens: d.output_tokens ?? 0,
+    totalTokens: d.total_tokens ?? 0,
+    estimatedCost: d.estimated_cost ?? 0,
+    model: d.model ?? null,
+  };
+}
+
+export async function skillsUsage(): Promise<{ name: string; uses: number }[]> {
+  // usage values are per-skill stat objects, e.g. { use_count, view_count, ... }
+  const data = await up<{ usage?: Record<string, number | { use_count?: number; count?: number }> }>(
+    "/api/skills/usage",
+  );
+  return Object.entries(data.usage ?? {}).map(([name, v]) => ({
+    name,
+    uses: typeof v === "number" ? v : (v?.use_count ?? v?.count ?? 0),
+  }));
+}
+
+export async function systemHealth(): Promise<Record<string, unknown>> {
+  return up<Record<string, unknown>>("/api/system/health");
+}

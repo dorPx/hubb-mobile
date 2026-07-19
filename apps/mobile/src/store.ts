@@ -36,7 +36,15 @@ export interface Credentials {
 export type Route =
   | { name: "pair" }
   | { name: "sessions" }
-  | { name: "chat"; sessionId: string; title: string; provider: string | null; model: string | null };
+  | { name: "chat"; sessionId: string; title: string; provider: string | null; model: string | null }
+  | { name: "files"; path?: string }
+  | { name: "file"; path: string }
+  | { name: "tasks" }
+  | { name: "skills" }
+  | { name: "insights" };
+
+/** Top-level tabs (routes reachable from the tab bar). */
+export type TabName = "sessions" | "files" | "tasks" | "skills" | "insights";
 
 interface AppState {
   hydrated: boolean;

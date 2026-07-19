@@ -1,22 +1,25 @@
-// Dark-first theme lifted from hermes-webui's dark palette (static/style.css)
-// so the mobile client reads as the same product family.
+// HUBB theme — modern black / dark blue / light blue / white.
+// Restrained product register: near-black base, dark-blue panel layer,
+// a single light-blue accent for actions/selection, white ink.
 export const theme = {
-  bg: "#0D0D1A",
-  sidebar: "#141425",
-  surface: "#1A1A2E",
-  border: "#2A2A45",
-  text: "#FFF8DC",
-  muted: "#C0C0C0",
-  accent: "#FFD700",
-  accentDim: "#FFBF00",
-  info: "#4DD0E1",
-  error: "#EF5350",
-  success: "#4CAF50",
-  warning: "#FFA726",
-  userBubble: "#23233C",
-  scrim: "rgba(0, 0, 0, 0.65)",
+  bg: "#05070D", // black, blue-cast
+  sidebar: "#0A101C", // panel layer (headers, tab bar)
+  surface: "#0E1626", // dark blue cards/inputs
+  surfaceHigh: "#15203A", // pressed/hover layer
+  border: "#1B2A45",
+  text: "#F4F7FF", // white ink
+  muted: "#8FA5C9", // blue-gray secondary (≥4.5:1 on bg and surface)
+  accent: "#57A8FF", // light blue — actions, selection, live state
+  accentDim: "#2F7FE0",
+  onAccent: "#04121F", // ink on accent fills
+  info: "#6FC3FF",
+  error: "#FF7A7A",
+  success: "#45D68A",
+  warning: "#FFC061",
+  userBubble: "#132441", // user chat bubble, dark blue
+  scrim: "rgba(2, 6, 14, 0.7)",
   spacing: (n: number) => n * 4,
-  radius: { sm: 6, md: 10, lg: 16 },
+  radius: { sm: 8, md: 12, lg: 18 },
   font: {
     body: 15,
     small: 12,

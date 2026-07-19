@@ -4,8 +4,13 @@ import { StyleSheet, View } from "react-native";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { theme } from "@hermes-mobile/ui";
 import { ChatScreen } from "./src/screens/ChatScreen";
+import { FilesScreen } from "./src/screens/FilesScreen";
+import { FileViewScreen } from "./src/screens/FileViewScreen";
+import { InsightsScreen } from "./src/screens/InsightsScreen";
 import { PairScreen } from "./src/screens/PairScreen";
 import { SessionsScreen } from "./src/screens/SessionsScreen";
+import { SkillsScreen } from "./src/screens/SkillsScreen";
+import { TasksScreen } from "./src/screens/TasksScreen";
 import { useApp } from "./src/store";
 
 const queryClient = new QueryClient({
@@ -29,8 +34,18 @@ export default function App() {
           <PairScreen />
         ) : route.name === "sessions" ? (
           <SessionsScreen />
-        ) : (
+        ) : route.name === "chat" ? (
           <ChatScreen route={route} />
+        ) : route.name === "files" ? (
+          <FilesScreen path={route.path} />
+        ) : route.name === "file" ? (
+          <FileViewScreen path={route.path} />
+        ) : route.name === "tasks" ? (
+          <TasksScreen />
+        ) : route.name === "skills" ? (
+          <SkillsScreen />
+        ) : (
+          <InsightsScreen />
         )}
       </View>
     </QueryClientProvider>

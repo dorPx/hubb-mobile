@@ -44,8 +44,8 @@ export function PairScreen() {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.brand}>Hermes Mobile</Text>
-      <Text style={styles.sub}>Pair with your desktop gateway</Text>
+      <Text style={styles.brand}>HUBB</Text>
+      <Text style={styles.sub}>Pair with your Hermes gateway</Text>
       <TextInput
         style={styles.input}
         value={url}
@@ -69,7 +69,7 @@ export function PairScreen() {
       {!!error && <Text style={styles.error}>{error}</Text>}
       <Pressable style={styles.btn} onPress={pair} disabled={busy} testID="pair-submit">
         {busy ? (
-          <ActivityIndicator color={theme.bg} />
+          <ActivityIndicator color={theme.onAccent} />
         ) : (
           <Text style={styles.btnText}>Pair</Text>
         )}
@@ -83,7 +83,7 @@ export function PairScreen() {
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: theme.bg, padding: theme.spacing(6), justifyContent: "center" },
-  brand: { color: theme.accent, fontSize: 28, fontWeight: "700", textAlign: "center" },
+  brand: { color: theme.text, fontSize: 34, fontWeight: "800", textAlign: "center", letterSpacing: 1.5 },
   sub: {
     color: theme.muted,
     fontSize: theme.font.body,
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: theme.spacing(2),
   },
-  btnText: { color: theme.bg, fontSize: theme.font.body, fontWeight: "700" },
+  btnText: { color: theme.onAccent, fontSize: theme.font.body, fontWeight: "700" },
   error: { color: theme.error, fontSize: theme.font.small, marginBottom: theme.spacing(2) },
   hint: {
     color: theme.muted,

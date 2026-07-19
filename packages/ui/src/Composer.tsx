@@ -74,6 +74,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendDisabled: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border },
-  sendText: { color: theme.bg, fontSize: 16, fontWeight: "700" },
+  sendText: { color: theme.onAccent, fontSize: 16, fontWeight: "700" },
   sendTextDisabled: { color: theme.muted },
 });

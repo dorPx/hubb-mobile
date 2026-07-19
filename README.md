@@ -1,6 +1,6 @@
-# hermes-mobile
+# HUBB — mobile
 
-Native mobile client for the [Hermes Agent](https://github.com/NousResearch/hermes-agent) ecosystem: an Expo (dev-client) Android app plus a mobile-aware Node gateway. The phone is a **viewer, not the executor** — all agent work runs server-side and every event is durably logged, so backgrounding or killing the app never loses a turn.
+Native mobile client for the [Hermes Agent](https://github.com/NousResearch/hermes-agent) ecosystem: an Expo (dev-client) Android app plus a mobile-aware Node gateway, in a modern black / dark-blue / light-blue / white theme. Sibling of the [HUBB dispatch-terminal PWA](https://github.com/dorPx/hubb). The phone is a **viewer, not the executor** — all agent work runs server-side and every event is durably logged, so backgrounding or killing the app never loses a turn.
 
 ## Layout (Turborepo)
 

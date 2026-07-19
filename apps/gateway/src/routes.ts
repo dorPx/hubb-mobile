@@ -189,3 +189,117 @@ router.get("/sessions/:id/stream", requireAuth, (req: AuthedRequest, res: Respon
     unsub();
   });
 });
+
+// ------------------------------------------------------------- milestone 2
+
+router.get("/search", requireAuth, async (req, res, next) => {
+  const q = String(req.query.q ?? "").trim();
+  if (!q) return res.json([]);
+  try {
+    res.json(await upstream.searchSessions(q));
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/workspaces", requireAuth, async (_req, res, next) => {
+  try {
+    res.json(await upstream.listWorkspaces());
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/files", requireAuth, async (req, res, next) => {
+  const path = String(req.query.path ?? "");
+  if (!path) return res.status(400).json({ error: "path required" });
+  try {
+    res.json(await upstream.listDir(path));
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/file", requireAuth, async (req, res, next) => {
+  const path = String(req.query.path ?? "");
+  if (!path) return res.status(400).json({ error: "path required" });
+  try {
+    res.json(await upstream.readFile(path));
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/tasks", requireAuth, async (_req, res, next) => {
+  try {
+    res.json(await upstream.listCrons());
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post("/tasks/:id/:action", requireAuth, async (req, res, next) => {
+  const action = req.params.action;
+  if (action !== "pause" && action !== "resume" && action !== "run") {
+    return res.status(400).json({ error: "action must be pause|resume|run" });
+  }
+  try {
+    await upstream.cronAction(req.params.id, action);
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/tasks/:id/history", requireAuth, async (req, res, next) => {
+  try {
+    res.json(await upstream.cronHistory(req.params.id));
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/skills", requireAuth, async (_req, res, next) => {
+  try {
+    res.json(await upstream.listSkills());
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post("/skills/:name/toggle", requireAuth, async (req, res, next) => {
+  const disabled = !!req.body?.disabled;
+  try {
+    await upstream.toggleSkill(req.params.name, disabled);
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/sessions/:id/usage", requireAuth, async (req, res, next) => {
+  try {
+    res.json(await upstream.sessionUsage(req.params.id));
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/insights", requireAuth, async (_req, res, next) => {
+  try {
+    const [health, skills, sessions] = await Promise.allSettled([
+      upstream.systemHealth(),
+      upstream.skillsUsage(),
+      upstream.listSessions(),
+    ]);
+    res.json({
+      upstreamReachable: await upstream.upstreamReachable(),
+      activeStreams: upstream.activeStreamCount(),
+      health: health.status === "fulfilled" ? health.value : null,
+      skillsUsage: skills.status === "fulfilled" ? skills.value : [],
+      sessionCount: sessions.status === "fulfilled" ? sessions.value.length : null,
+    });
+  } catch (e) {
+    next(e);
+  }
+});

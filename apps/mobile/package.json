@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
     "@hermes-mobile/api-client": "workspace:*",
     "@hermes-mobile/shared": "workspace:*",
     "@hermes-mobile/ui": "workspace:*",
