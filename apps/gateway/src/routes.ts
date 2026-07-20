@@ -303,3 +303,184 @@ router.get("/insights", requireAuth, async (_req, res, next) => {
     next(e);
   }
 });
+
+// ------------------------------------------------------------- milestone 3
+
+router.get("/soul", requireAuth, async (_req, res, next) => {
+  try {
+    res.json(await upstream.getSoul());
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.put("/soul", requireAuth, async (req, res, next) => {
+  const content = typeof req.body?.content === "string" ? req.body.content : null;
+  if (content === null) return res.status(400).json({ error: "content required" });
+  try {
+    await upstream.saveSoul(content);
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.get("/providers", requireAuth, async (_req, res, next) => {
+  try {
+    res.json(await upstream.listProviders());
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.put("/providers/:id/key", requireAuth, async (req, res, next) => {
+  const key = req.body?.apiKey;
+  try {
+    await upstream.setProviderKey(req.params.id, typeof key === "string" && key ? key : null);
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post("/terminal/:sessionId/start", requireAuth, async (req, res, next) => {
+  try {
+    await upstream.terminalStart(
+      req.params.sessionId,
+      Number(req.body?.rows) || 24,
+      Number(req.body?.cols) || 80,
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post("/terminal/:sessionId/input", requireAuth, async (req, res, next) => {
+  const data = typeof req.body?.data === "string" ? req.body.data : "";
+  try {
+    await upstream.terminalInput(req.params.sessionId, data);
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post("/terminal/:sessionId/close", requireAuth, async (req, res) => {
+  await upstream.terminalClose(req.params.sessionId);
+  res.json({ ok: true });
+});
+
+/** SSE pass-through of the host terminal's output. */
+router.get("/terminal/:sessionId/output", requireAuth, async (req, res) => {
+  const ctrl = new AbortController();
+  req.on("close", () => ctrl.abort());
+  try {
+    const up_ = await upstream.terminalOutputStream(req.params.sessionId, ctrl.signal);
+    if (!up_.ok || !up_.body) {
+      return res.status(up_.status).json({ error: "terminal stream failed" });
+    }
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-store",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    for await (const chunk of up_.body) res.write(chunk);
+  } catch {
+    /* stream ended or client left */
+  }
+  res.end();
+});
+
+// Keyless news proxy w/ cache — spares the phone CORS trouble and spares
+// GDELT repeat hits (it rate-limits aggressively).
+const newsCache = new Map<string, { at: number; items: unknown[] }>();
+router.get("/news", requireAuth, async (req, res) => {
+  const q = String(req.query.q ?? "world");
+  const hit = newsCache.get(q);
+  if (hit && Date.now() - hit.at < 10 * 60_000) return res.json(hit.items);
+  try {
+    const r = await fetch(
+      "https://api.gdeltproject.org/api/v2/doc/doc?query=" +
+        encodeURIComponent(`${q} sourcelang:english`) +
+        "&mode=artlist&maxrecords=14&format=json&sort=datedesc",
+      { signal: AbortSignal.timeout(12000) },
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = (await r.json()) as { articles?: { title: string; domain?: string; seendate?: string; url: string }[] };
+    const items = (d.articles ?? []).map((a) => ({
+      title: a.title,
+      src: (a.domain ?? "").replace(/^www\./, ""),
+      seendate: a.seendate ?? null,
+      url: a.url,
+    }));
+    if (!items.length) throw new Error("empty wire");
+    newsCache.set(q, { at: Date.now(), items });
+    res.json(items);
+  } catch (e) {
+    if (hit) return res.json(hit.items); // stale beats nothing
+    res.status(502).json({ error: "news wire unreachable: " + String((e as Error).message || e) });
+  }
+});
+
+// FX reference rates proxy (frankfurter blocks browser CORS; native is fine
+// either way). Cached for an hour — ECB updates once a day.
+let fxCache: { at: number; body: unknown } | null = null;
+router.get("/fx", requireAuth, async (_req, res) => {
+  if (fxCache && Date.now() - fxCache.at < 60 * 60_000) return res.json(fxCache.body);
+  try {
+    const r = await fetch("https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR,GBP,JPY,CHF,CAD", {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const body = await r.json();
+    fxCache = { at: Date.now(), body };
+    res.json(body);
+  } catch (e) {
+    if (fxCache) return res.json(fxCache.body);
+    res.status(502).json({ error: "fx unavailable: " + String((e as Error).message || e) });
+  }
+});
+
+// ------------------------------------------------------------- milestone 4
+
+router.post("/files/create", requireAuth, async (req, res, next) => {
+  const dir = String(req.body?.dir ?? "");
+  const name = String(req.body?.name ?? "").trim();
+  const content = typeof req.body?.content === "string" ? req.body.content : "";
+  if (!dir || !name) return res.status(400).json({ error: "dir and name required" });
+  if (name.includes("/") || name.includes("..")) return res.status(400).json({ error: "invalid file name" });
+  try {
+    res.status(201).json(await upstream.createFile(dir, name, content));
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post("/tasks/create", requireAuth, async (req, res, next) => {
+  const prompt = String(req.body?.prompt ?? "").trim();
+  const schedule = String(req.body?.schedule ?? "").trim();
+  if (!prompt || !schedule) return res.status(400).json({ error: "prompt and schedule required" });
+  try {
+    res.status(201).json(
+      await upstream.createTask({
+        name: String(req.body?.name ?? "").trim(),
+        prompt,
+        schedule,
+        deliver: req.body?.deliver ? String(req.body.deliver) : undefined,
+      }),
+    );
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete("/tasks/:id", requireAuth, async (req, res, next) => {
+  try {
+    await upstream.deleteTask(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});

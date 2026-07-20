@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ActivityIndicator,
@@ -12,6 +13,7 @@ import { theme } from "@hermes-mobile/ui";
 import { gateway } from "../client";
 import { useApp } from "../store";
 import { TabBar } from "../components/TabBar";
+import { AddFileSheet } from "../components/AddFileSheet";
 
 function fmtSize(n: number | null): string {
   if (n == null) return "";
@@ -23,6 +25,7 @@ function fmtSize(n: number | null): string {
 /** Workspace file browser (gateway-mediated; reference-app parity). */
 export function FilesScreen({ path }: { path?: string }) {
   const navigate = useApp((s) => s.navigate);
+  const [adding, setAdding] = useState(false);
 
   const workspaces = useQuery({
     queryKey: ["workspaces"],
@@ -56,6 +59,12 @@ export function FilesScreen({ path }: { path?: string }) {
         <Text style={styles.title} numberOfLines={1}>
           {atRoot ? "Files" : (path ?? "").split("/").pop() || path}
         </Text>
+        {!atRoot && (
+          <Pressable style={styles.addBtn} onPress={() => setAdding(true)} testID="files-add">
+            <Ionicons name="add" size={18} color={theme.onAccent} />
+            <Text style={styles.addText}>Add</Text>
+          </Pressable>
+        )}
       </View>
       {loading && <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />}
       {!!error && <Text style={styles.error}>{error.message}</Text>}
@@ -103,6 +112,7 @@ export function FilesScreen({ path }: { path?: string }) {
         />
       )}
       <TabBar active="files" />
+      {adding && path && <AddFileSheet dir={path} onClose={() => setAdding(false)} />}
     </View>
   );
 }
@@ -121,6 +131,16 @@ const styles = StyleSheet.create({
   back: { paddingHorizontal: theme.spacing(1) },
   backText: { color: theme.text, fontSize: 26, lineHeight: 26 },
   title: { color: theme.text, fontSize: 20, fontWeight: "700", flex: 1 },
+  addBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: theme.accent,
+    borderRadius: theme.radius.sm,
+    paddingHorizontal: theme.spacing(2.5),
+    paddingVertical: theme.spacing(1.5),
+  },
+  addText: { color: theme.onAccent, fontWeight: "700", fontSize: theme.font.small },
   row: {
     flexDirection: "row",
     alignItems: "center",

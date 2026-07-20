@@ -384,3 +384,156 @@ export async function skillsUsage(): Promise<{ name: string; uses: number }[]> {
 export async function systemHealth(): Promise<Record<string, unknown>> {
   return up<Record<string, unknown>>("/api/system/health");
 }
+
+// ------------------------------------------------------------- milestone 3
+
+export async function getSoul(): Promise<{ soul: string; path: string }> {
+  const d = await up<{ soul?: string; soul_path?: string }>("/api/memory");
+  return { soul: d.soul ?? "", path: d.soul_path ?? "" };
+}
+
+export async function saveSoul(content: string): Promise<void> {
+  const r = await up<{ ok?: boolean; error?: string }>("/api/memory/write", {
+    method: "POST",
+    body: JSON.stringify({ section: "soul", content }),
+  });
+  if (r.error) throw new Error(r.error);
+}
+
+export interface ProviderInfo {
+  id: string;
+  name: string;
+  hasKey: boolean;
+  configurable: boolean;
+  keySource: string | null;
+  authError: string | null;
+  modelCount: number;
+}
+
+export async function listProviders(): Promise<ProviderInfo[]> {
+  type Raw = {
+    id: string; display_name?: string; has_key?: boolean; configurable?: boolean;
+    key_source?: string | null; auth_error?: string | null; models?: unknown[];
+  };
+  // auth probes upstream make this slow — allow up to 60s
+  const d = await up<Raw[] | { providers?: Raw[] }>("/api/providers", {
+    signal: AbortSignal.timeout(60000),
+  });
+  const arr = Array.isArray(d) ? d : (d.providers ?? []);
+  return arr.map((p) => ({
+    id: p.id,
+    name: p.display_name || p.id,
+    hasKey: !!p.has_key,
+    configurable: p.configurable !== false,
+    keySource: p.key_source ?? null,
+    authError: p.auth_error ?? null,
+    modelCount: p.models?.length ?? 0,
+  }));
+}
+
+export async function setProviderKey(provider: string, apiKey: string | null): Promise<void> {
+  const r = await up<{ ok?: boolean; error?: string }>("/api/providers", {
+    method: "POST",
+    body: JSON.stringify({ provider, api_key: apiKey }),
+  });
+  if (r.error) throw new Error(r.error);
+}
+
+// ---- embedded terminal (runs on the Hermes host; over a VPS pairing this
+// is effectively an SSH session rendered in the app) ----
+
+export async function terminalStart(sessionId: string, rows: number, cols: number): Promise<void> {
+  const r = await up<{ error?: string }>("/api/terminal/start", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, rows, cols }),
+  });
+  if (r.error) throw new Error(r.error);
+}
+
+export async function terminalInput(sessionId: string, data: string): Promise<void> {
+  await up("/api/terminal/input", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId, data }),
+  });
+}
+
+export async function terminalClose(sessionId: string): Promise<void> {
+  await up("/api/terminal/close", {
+    method: "POST",
+    body: JSON.stringify({ session_id: sessionId }),
+  }).catch(() => undefined);
+}
+
+/** Raw upstream SSE response for terminal output; caller pipes it. */
+export function terminalOutputStream(sessionId: string, signal: AbortSignal): Promise<Response> {
+  return fetch(
+    `${config.upstreamUrl}/api/terminal/output?session_id=${encodeURIComponent(sessionId)}`,
+    { headers: { Accept: "text/event-stream" }, signal },
+  );
+}
+
+// ------------------------------------------------------------- milestone 4
+
+/** Create a text file inside `dir` (absolute path shown in the Files screen)
+ * so Hermes can read it. Resolves the owning session's workspace to convert
+ * to the workspace-relative path upstream expects. */
+export async function createFile(dir: string, name: string, content: string): Promise<{ path: string }> {
+  const sessions = await listSessions();
+  if (!sessions.length) throw new Error("create a chat session first — files attach to a workspace");
+  // prefer a session whose workspace contains this dir; else the first one
+  const owner =
+    sessions.find((s) => s.workspace && (dir === s.workspace || dir.startsWith(s.workspace + "/"))) ??
+    sessions[0];
+  const root = owner.workspace ?? dir;
+  const relDir = dir === root ? "" : dir.startsWith(root + "/") ? dir.slice(root.length + 1) : "";
+  const relPath = relDir ? `${relDir}/${name}` : name;
+  const r = await up<{ ok?: boolean; error?: string; path?: string }>("/api/file/create", {
+    method: "POST",
+    body: JSON.stringify({ session_id: owner.id, path: relPath, content }),
+  });
+  if (r.error) throw new Error(r.error);
+  return { path: r.path ?? relPath };
+}
+
+export interface CreateTaskInput {
+  name: string;
+  prompt: string;
+  schedule: string; // cron expression
+  deliver?: string;
+}
+
+export async function createTask(input: CreateTaskInput): Promise<CronJob> {
+  const r = await up<{ ok?: boolean; error?: string; job?: Record<string, unknown> }>("/api/crons/create", {
+    method: "POST",
+    body: JSON.stringify({
+      name: input.name || undefined,
+      prompt: input.prompt,
+      schedule: input.schedule,
+      deliver: input.deliver || "local",
+    }),
+  });
+  if (r.error || !r.job) throw new Error(r.error || "create failed");
+  const j = r.job as {
+    id: string; name?: string; prompt?: string; schedule?: string | { display?: string; expr?: string };
+    provider_snapshot?: string | null; model_snapshot?: string | null;
+  };
+  return {
+    id: j.id,
+    name: j.name || "Unnamed job",
+    prompt: j.prompt || "",
+    schedule: typeof j.schedule === "string" ? j.schedule : (j.schedule?.display ?? j.schedule?.expr ?? input.schedule),
+    paused: false,
+    provider: j.provider_snapshot ?? null,
+    model: j.model_snapshot ?? null,
+    lastRunAt: null,
+    lastStatus: null,
+  };
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  const r = await up<{ ok?: boolean; error?: string }>("/api/crons/delete", {
+    method: "POST",
+    body: JSON.stringify({ job_id: id }),
+  });
+  if (r.error) throw new Error(r.error);
+}

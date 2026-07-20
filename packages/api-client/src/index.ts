@@ -80,6 +80,17 @@ const insightsSchema = z.object({
 });
 export type Insights = z.infer<typeof insightsSchema>;
 
+const providerInfoSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  hasKey: z.boolean(),
+  configurable: z.boolean(),
+  keySource: z.string().nullable(),
+  authError: z.string().nullable(),
+  modelCount: z.number(),
+});
+export type ProviderInfo = z.infer<typeof providerInfoSchema>;
+
 const sessionUsageSchema = z.object({
   inputTokens: z.number(),
   outputTokens: z.number(),
@@ -256,6 +267,26 @@ export class GatewayClient {
     );
   }
 
+  createTask(input: { name: string; prompt: string; schedule: string; deliver?: string }): Promise<CronJob> {
+    return this.request("/v1/tasks/create", cronJobSchema, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  deleteTask(id: string): Promise<{ ok: boolean }> {
+    return this.request(`/v1/tasks/${encodeURIComponent(id)}`, z.object({ ok: z.boolean() }), {
+      method: "DELETE",
+    });
+  }
+
+  createFile(dir: string, name: string, content: string): Promise<{ path: string }> {
+    return this.request("/v1/files/create", z.object({ path: z.string() }), {
+      method: "POST",
+      body: JSON.stringify({ dir, name, content }),
+    });
+  }
+
   skills(): Promise<SkillInfo[]> {
     return this.request("/v1/skills", z.array(skillInfoSchema));
   }
@@ -274,6 +305,102 @@ export class GatewayClient {
 
   insights(): Promise<Insights> {
     return this.request("/v1/insights", insightsSchema);
+  }
+
+  // ---------------------------------------------------------- milestone 3
+
+  getSoul(): Promise<{ soul: string; path: string }> {
+    return this.request("/v1/soul", z.object({ soul: z.string(), path: z.string() }));
+  }
+
+  saveSoul(content: string): Promise<{ ok: boolean }> {
+    return this.request("/v1/soul", z.object({ ok: z.boolean() }), {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  providers(): Promise<ProviderInfo[]> {
+    return this.request("/v1/providers", z.array(providerInfoSchema));
+  }
+
+  setProviderKey(id: string, apiKey: string | null): Promise<{ ok: boolean }> {
+    return this.request(
+      `/v1/providers/${encodeURIComponent(id)}/key`,
+      z.object({ ok: z.boolean() }),
+      { method: "PUT", body: JSON.stringify({ apiKey }) },
+    );
+  }
+
+  terminalStart(sessionId: string, rows: number, cols: number): Promise<{ ok: boolean }> {
+    return this.request(
+      `/v1/terminal/${encodeURIComponent(sessionId)}/start`,
+      z.object({ ok: z.boolean() }),
+      { method: "POST", body: JSON.stringify({ rows, cols }) },
+    );
+  }
+
+  terminalInput(sessionId: string, data: string): Promise<{ ok: boolean }> {
+    return this.request(
+      `/v1/terminal/${encodeURIComponent(sessionId)}/input`,
+      z.object({ ok: z.boolean() }),
+      { method: "POST", body: JSON.stringify({ data }) },
+    );
+  }
+
+  terminalClose(sessionId: string): Promise<{ ok: boolean }> {
+    return this.request(
+      `/v1/terminal/${encodeURIComponent(sessionId)}/close`,
+      z.object({ ok: z.boolean() }),
+      { method: "POST", body: "{}" },
+    );
+  }
+
+  /** Stream raw terminal output text chunks (SSE `data:` payloads). */
+  streamTerminal(
+    sessionId: string,
+    onData: (text: string) => void,
+    onError?: (err: Error) => void,
+  ): EventStreamHandle {
+    const ctrl = new AbortController();
+    const done = (async () => {
+      const token = await this.opts.getAccessToken?.();
+      const res = await this.fetchImpl(
+        `${this.baseUrl}/v1/terminal/${encodeURIComponent(sessionId)}/output`,
+        {
+          headers: {
+            Accept: "text/event-stream",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          signal: ctrl.signal,
+        },
+      );
+      if (!res.ok || !res.body) throw new GatewayError(`terminal stream: HTTP ${res.status}`, res.status);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { done: eof, value } = await reader.read();
+        if (eof) break;
+        buf += decoder.decode(value, { stream: true });
+        const frames = buf.split("\n\n");
+        buf = frames.pop() ?? "";
+        for (const frame of frames) {
+          for (const line of frame.split("\n")) {
+            if (!line.startsWith("data:")) continue;
+            try {
+              const j = JSON.parse(line.slice(5).trim()) as { data?: string };
+              if (typeof j.data === "string") onData(j.data);
+            } catch {
+              onData(line.slice(5));
+            }
+          }
+        }
+      }
+    })().catch((e: Error) => {
+      if (e.name !== "AbortError") onError?.(e);
+    });
+    return { close: () => ctrl.abort(), done };
   }
 
   /** Replay persisted events after `afterSeq` (catch-up without a live stream). */

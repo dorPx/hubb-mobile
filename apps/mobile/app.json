@@ -22,6 +22,20 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "backgroundColor": "#05070D"
+    "backgroundColor": "#05070D",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "HUBB uses your location for local weather and news."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "HUBB shows today’s events in your daily brief."
+        }
+      ]
+    ]
   }
 }

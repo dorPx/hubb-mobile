@@ -41,15 +41,25 @@ export type Route =
   | { name: "file"; path: string }
   | { name: "tasks" }
   | { name: "skills" }
-  | { name: "insights" };
+  | { name: "insights" }
+  | { name: "today" }
+  | { name: "news" }
+  | { name: "markets" }
+  | { name: "profile" }
+  | { name: "terminal" }
+  | { name: "settings" };
 
-/** Top-level tabs (routes reachable from the tab bar). */
-export type TabName = "sessions" | "files" | "tasks" | "skills" | "insights";
+/** Destinations reachable from the drawer / tab bar. */
+export type TabName =
+  | "sessions" | "today" | "news" | "markets" | "files" | "tasks"
+  | "skills" | "insights" | "profile" | "terminal" | "settings";
 
 interface AppState {
   hydrated: boolean;
   credentials: Credentials | null;
   route: Route;
+  drawerOpen: boolean;
+  setDrawer: (open: boolean) => void;
   navigate: (route: Route) => void;
   setCredentials: (c: Credentials | null) => void;
   hydrate: () => Promise<void>;
@@ -59,7 +69,9 @@ export const useApp = create<AppState>((set) => ({
   hydrated: false,
   credentials: null,
   route: { name: "pair" },
-  navigate: (route) => set({ route }),
+  drawerOpen: false,
+  setDrawer: (drawerOpen) => set({ drawerOpen }),
+  navigate: (route) => set({ route, drawerOpen: false }),
   setCredentials: (credentials) => {
     set({ credentials, route: credentials ? { name: "sessions" } : { name: "pair" } });
     if (credentials) void secure.set(CRED_KEY, JSON.stringify(credentials));

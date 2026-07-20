@@ -18,6 +18,11 @@ export const theme = {
   warning: "#FFC061",
   userBubble: "#132441", // user chat bubble, dark blue
   scrim: "rgba(2, 6, 14, 0.7)",
+  // IBM Plex Sans — serious, technical, highly legible (loaded in App root;
+  // falls back to the system sans until fonts resolve).
+  fontFamily: "IBMPlexSans_400Regular",
+  fontFamilyMedium: "IBMPlexSans_500Medium",
+  fontFamilyBold: "IBMPlexSans_700Bold",
   spacing: (n: number) => n * 4,
   radius: { sm: 8, md: 12, lg: 18 },
   font: {
