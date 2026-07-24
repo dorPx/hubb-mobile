@@ -15,6 +15,7 @@ import {
 import { config } from "./config.js";
 import { db } from "./db.js";
 import { eventsAfter, subscribe } from "./events.js";
+import * as ssh from "./ssh.js";
 import * as upstream from "./upstream.js";
 
 export const router = Router();
@@ -391,6 +392,74 @@ router.get("/terminal/:sessionId/output", requireAuth, async (req, res) => {
     /* stream ended or client left */
   }
   res.end();
+});
+
+// ------------------------------------------------------------------- ssh
+// The gateway opens a real SSH shell to an arbitrary host and bridges it to
+// the phone. Credentials are used to connect and are not persisted.
+
+router.post("/ssh/connect", requireAuth, async (req: AuthedRequest, res) => {
+  const body = req.body ?? {};
+  const host = typeof body.host === "string" ? body.host.trim() : "";
+  const username = typeof body.username === "string" ? body.username.trim() : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  if (!host || !username || !password) {
+    return res.status(400).json({ error: "host, username, and password are required", code: "ssh_input" });
+  }
+  try {
+    const { id } = await ssh.openSsh(req.deviceId!, {
+      host,
+      port: Number(body.port) || 22,
+      username,
+      password,
+      rows: Number(body.rows) || 24,
+      cols: Number(body.cols) || 80,
+    });
+    res.json({ sshId: id });
+  } catch (e) {
+    res.status(502).json({ error: `ssh connect failed: ${(e as Error).message}`, code: "ssh_connect" });
+  }
+});
+
+router.post("/ssh/:id/input", requireAuth, (req: AuthedRequest, res) => {
+  const data = typeof req.body?.data === "string" ? req.body.data : "";
+  if (!ssh.writeSsh(req.params.id, req.deviceId!, data)) {
+    return res.status(404).json({ error: "no such ssh session", code: "ssh_missing" });
+  }
+  res.json({ ok: true });
+});
+
+router.post("/ssh/:id/close", requireAuth, (req: AuthedRequest, res) => {
+  if (ssh.sshOwned(req.params.id, req.deviceId!)) ssh.closeSsh(req.params.id);
+  res.json({ ok: true });
+});
+
+/** SSE stream of the SSH shell's output (replays retained buffer, then live). */
+router.get("/ssh/:id/output", requireAuth, (req: AuthedRequest, res) => {
+  if (!ssh.sshOwned(req.params.id, req.deviceId!)) {
+    return res.status(404).json({ error: "no such ssh session", code: "ssh_missing" });
+  }
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-store",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  const ping = setInterval(() => res.write(": ping\n\n"), 25_000);
+  const unsub = ssh.subscribeSsh(
+    req.params.id,
+    req.deviceId!,
+    (text) => res.write(`data: ${JSON.stringify({ data: text })}\n\n`),
+    () => {
+      res.write("event: close\ndata: {}\n\n");
+      clearInterval(ping);
+      res.end();
+    },
+  );
+  req.on("close", () => {
+    clearInterval(ping);
+    unsub?.();
+  });
 });
 
 // Keyless news proxy w/ cache — spares the phone CORS trouble and spares

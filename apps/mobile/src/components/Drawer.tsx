@@ -10,6 +10,7 @@ const ITEMS: { tab: TabName; label: string; icon: keyof typeof Ionicons.glyphMap
   { tab: "sessions", label: "Chats", icon: "chatbubble-outline", group: "Hermes" },
   { tab: "profile", label: "What am I?", icon: "sparkles-outline", group: "Hermes" },
   { tab: "terminal", label: "Host terminal", icon: "code-slash-outline", group: "Hermes" },
+  { tab: "ssh", label: "SSH access point", icon: "terminal-outline", group: "Hermes" },
   { tab: "skills", label: "Skills", icon: "extension-puzzle-outline", group: "Hermes" },
   { tab: "tasks", label: "Scheduled tasks", icon: "alarm-outline", group: "Ops" },
   { tab: "files", label: "Files", icon: "folder-outline", group: "Ops" },
@@ -30,12 +31,26 @@ export function Drawer({ active }: { active: TabName }) {
       <Pressable style={styles.scrim} onPress={() => setDrawer(false)} testID="drawer-scrim" />
       <View style={styles.panel}>
         <View style={styles.head}>
-          <Text style={styles.brand}>HUBB</Text>
+          <Text style={styles.brand}>
+            HERMES<Text style={styles.brandSlash}>//</Text>HUB
+          </Text>
           <Pressable onPress={() => setDrawer(false)} hitSlop={12} testID="drawer-close">
             <Ionicons name="close" size={22} color={theme.muted} />
           </Pressable>
         </View>
         <ScrollView>
+          <Pressable
+            style={styles.hubRow}
+            onPress={() => navigate({ name: "comms" })}
+            testID="drawer-hub"
+          >
+            <Ionicons name="chevron-back" size={18} color={theme.accent} />
+            <Ionicons name="apps-outline" size={18} color={theme.accent} />
+            <Text style={styles.hubLabel}>Command Hub</Text>
+          </Pressable>
+          <View style={styles.consoleDivider}>
+            <Text style={styles.consoleDividerText}>GATEWAY CONSOLE</Text>
+          </View>
           {ITEMS.map((it) => {
             const header = it.group !== lastGroup ? it.group : null;
             lastGroup = it.group;
@@ -82,7 +97,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
-  brand: { color: theme.text, fontSize: 19, fontWeight: "800", letterSpacing: 1.2, fontFamily: theme.fontFamily },
+  brand: { color: theme.text, fontSize: 19, letterSpacing: 1.2, fontFamily: theme.display },
+  brandSlash: { color: theme.accent },
+  hubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing(2),
+    paddingHorizontal: theme.spacing(4),
+    paddingVertical: theme.spacing(3),
+    backgroundColor: theme.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  hubLabel: { color: theme.accent, fontSize: theme.font.body, fontFamily: theme.monoMedium, letterSpacing: 0.5 },
+  consoleDivider: { paddingHorizontal: theme.spacing(4), paddingTop: theme.spacing(4), paddingBottom: theme.spacing(1) },
+  consoleDividerText: { color: theme.muted, fontFamily: theme.mono, fontSize: 10, letterSpacing: 0.8 },
   group: {
     color: theme.muted,
     fontSize: 11,

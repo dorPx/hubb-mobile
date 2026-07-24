@@ -356,6 +356,89 @@ export class GatewayClient {
     );
   }
 
+  // ------------------------------------------------------------------- ssh
+
+  sshConnect(input: {
+    host: string;
+    port?: number;
+    username: string;
+    password: string;
+    rows?: number;
+    cols?: number;
+  }): Promise<{ sshId: string }> {
+    return this.request("/v1/ssh/connect", z.object({ sshId: z.string() }), {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  sshInput(sshId: string, data: string): Promise<{ ok: boolean }> {
+    return this.request(
+      `/v1/ssh/${encodeURIComponent(sshId)}/input`,
+      z.object({ ok: z.boolean() }),
+      { method: "POST", body: JSON.stringify({ data }) },
+    );
+  }
+
+  sshClose(sshId: string): Promise<{ ok: boolean }> {
+    return this.request(
+      `/v1/ssh/${encodeURIComponent(sshId)}/close`,
+      z.object({ ok: z.boolean() }),
+      { method: "POST", body: "{}" },
+    );
+  }
+
+  /** Stream SSH shell output (SSE `data:` chunks). `onClose` fires when the
+   * remote shell ends. */
+  streamSsh(
+    sshId: string,
+    onData: (text: string) => void,
+    onClose?: () => void,
+    onError?: (err: Error) => void,
+  ): EventStreamHandle {
+    const ctrl = new AbortController();
+    const done = (async () => {
+      const token = await this.opts.getAccessToken?.();
+      const res = await this.fetchImpl(`${this.baseUrl}/v1/ssh/${encodeURIComponent(sshId)}/output`, {
+        headers: {
+          Accept: "text/event-stream",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        signal: ctrl.signal,
+      });
+      if (!res.ok || !res.body) throw new GatewayError(`ssh stream: HTTP ${res.status}`, res.status);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { done: eof, value } = await reader.read();
+        if (eof) break;
+        buf += decoder.decode(value, { stream: true });
+        const frames = buf.split("\n\n");
+        buf = frames.pop() ?? "";
+        for (const frame of frames) {
+          if (frame.startsWith(":")) continue; // keep-alive ping
+          if (frame.includes("event: close")) {
+            onClose?.();
+            continue;
+          }
+          for (const line of frame.split("\n")) {
+            if (!line.startsWith("data:")) continue;
+            try {
+              const j = JSON.parse(line.slice(5).trim()) as { data?: string };
+              if (typeof j.data === "string") onData(j.data);
+            } catch {
+              /* non-JSON frame */
+            }
+          }
+        }
+      }
+    })().catch((e: Error) => {
+      if (e.name !== "AbortError") onError?.(e);
+    });
+    return { close: () => ctrl.abort(), done };
+  }
+
   /** Stream raw terminal output text chunks (SSE `data:` payloads). */
   streamTerminal(
     sessionId: string,

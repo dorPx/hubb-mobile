@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
 import { GatewayClient } from "@hermes-mobile/api-client";
 import { theme } from "@hermes-mobile/ui";
 import { resetGatewayClient } from "../client";
@@ -17,6 +18,7 @@ import { useApp } from "../store";
 // native dev-client build — same payload, camera instead of typing.
 export function PairScreen() {
   const setCredentials = useApp((s) => s.setCredentials);
+  const navigate = useApp((s) => s.navigate);
   const [url, setUrl] = useState("http://");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,7 +46,13 @@ export function PairScreen() {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.brand}>HUBB</Text>
+      <Pressable style={styles.back} onPress={() => navigate({ name: "comms" })} testID="pair-back">
+        <Ionicons name="chevron-back" size={18} color={theme.accent} />
+        <Text style={styles.backText}>BACK TO HUB</Text>
+      </Pressable>
+      <Text style={styles.brand}>
+        HERMES<Text style={styles.brandSlash}>//</Text>HUB
+      </Text>
       <Text style={styles.sub}>Pair with your Hermes gateway</Text>
       <TextInput
         style={styles.input}
@@ -83,7 +91,10 @@ export function PairScreen() {
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: theme.bg, padding: theme.spacing(6), justifyContent: "center" },
-  brand: { color: theme.text, fontSize: 34, fontWeight: "800", textAlign: "center", letterSpacing: 1.5 },
+  back: { position: "absolute", top: theme.spacing(12), left: theme.spacing(5), flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44 },
+  backText: { color: theme.accent, fontFamily: theme.mono, fontSize: 11, letterSpacing: 0.6 },
+  brand: { color: theme.text, fontSize: 32, fontFamily: theme.display, textAlign: "center", letterSpacing: 1.5 },
+  brandSlash: { color: theme.accent },
   sub: {
     color: theme.muted,
     fontSize: theme.font.body,
