@@ -7,6 +7,7 @@ import {
   type AgentEvent,
   type ChatSendRequest,
   type GatewayHealth,
+  type LoginRequest,
   type ModelInfo,
   type PairRequest,
   type SessionSummary,
@@ -157,6 +158,13 @@ export class GatewayClient {
 
   pair(req: PairRequest): Promise<TokenPair> {
     return this.request("/v1/auth/pair", tokenPairSchema, {
+      method: "POST",
+      body: JSON.stringify(req),
+    });
+  }
+
+  login(req: LoginRequest): Promise<TokenPair> {
+    return this.request("/v1/auth/login", tokenPairSchema, {
       method: "POST",
       body: JSON.stringify(req),
     });

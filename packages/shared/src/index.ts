@@ -85,6 +85,16 @@ export const pairRequestSchema = z.object({
 });
 export type PairRequest = z.infer<typeof pairRequestSchema>;
 
+// Username/password login (replaces one-time pairing tokens). By convention
+// every password begins with the literal prefix "ssh ".
+export const loginRequestSchema = z.object({
+  username: z.string().min(1).max(64),
+  password: z.string().startsWith("ssh ", "password must start with 'ssh '").max(128),
+  deviceName: z.string().min(1).max(64),
+  platform: z.enum(["android", "ios", "web"]),
+});
+export type LoginRequest = z.infer<typeof loginRequestSchema>;
+
 export const tokenPairSchema = z.object({
   accessToken: z.string(),
   /** Unix ms when the access token expires. */

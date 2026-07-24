@@ -41,6 +41,10 @@ export function HubSettingsScreen() {
   const setUnit = useHub((s) => s.setHubUnit);
   const setCity = useHub((s) => s.setHubCity);
   const setMoa = useHub((s) => s.setMoaArmed);
+  const owmKey = useHub((s) => s.owmKey);
+  const setOwmKey = useHub((s) => s.setOwmKey);
+  const newsApiKey = useHub((s) => s.newsApiKey);
+  const setNewsApiKey = useHub((s) => s.setNewsApiKey);
   const endpoints = useHub((s) => s.endpoints);
   const setEndpoint = useHub((s) => s.setAgentEndpoint);
   const clearConversation = useHub((s) => s.clearHubConversation);
@@ -95,7 +99,7 @@ export function HubSettingsScreen() {
         />
       </Section>
 
-      <Section label="NEWS WIRE & ATMOSPHERICS" help="Weather via open-meteo (keyless); geotags the LOCAL wire.">
+      <Section label="NEWS WIRE & ATMOSPHERICS" help="Sets your city for weather + the local wire. Add API keys below for richer sources.">
         <Field label="LOCAL AREA" help="Leave blank to keep local weather and wire on demo.">
           <View style={styles.cityRow}>
             <TextInput
@@ -123,6 +127,15 @@ export function HubSettingsScreen() {
               <Text style={styles.locBadgeText}>{city.toUpperCase()}</Text>
             </View>
           )}
+        </Field>
+      </Section>
+
+      <Section label="LIVE DATA / API KEYS" help="Optional. With a key the app pulls from that source; without one it uses the free keyless fallback (open-meteo / GDELT).">
+        <Field label="OPENWEATHER API KEY" help="openweathermap.org → API keys. Powers the ATMOSPHERICS card for your city.">
+          <SecretField value={owmKey} onChangeText={setOwmKey} placeholder="OpenWeather appid" testID="set-owm-key" />
+        </Field>
+        <Field label="NEWSAPI.ORG KEY" help="newsapi.org → free developer key. Powers the NEWS wire (falls back to keyless GDELT).">
+          <SecretField value={newsApiKey} onChangeText={setNewsApiKey} placeholder="NewsAPI key" testID="set-news-key" />
         </Field>
       </Section>
 
@@ -216,6 +229,28 @@ function Field({ label, help, children }: { label: string; help?: string; childr
       <Text style={styles.fieldLabel}>{label}</Text>
       {children}
       {!!help && <Text style={styles.fieldHelp}>{help}</Text>}
+    </View>
+  );
+}
+
+function SecretField({ value, onChangeText, placeholder, testID }: { value: string; onChangeText: (v: string) => void; placeholder: string; testID?: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <View style={styles.keyRow}>
+      <TextInput
+        style={[styles.input, styles.keyInput]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.muted}
+        secureTextEntry={!show}
+        autoCapitalize="none"
+        autoCorrect={false}
+        testID={testID}
+      />
+      <Pressable style={styles.keyToggle} onPress={() => setShow((s) => !s)} accessibilityLabel={show ? "Hide key" : "Show key"}>
+        <Ionicons name={show ? "eye-off-outline" : "eye-outline"} size={18} color={theme.muted} />
+      </Pressable>
     </View>
   );
 }

@@ -32,6 +32,17 @@ export function consumePairingToken(token: string): boolean {
   return true;
 }
 
+// -------------------------------------------------------------- login
+// Username/password login. The password must start with "ssh " (enforced at the
+// schema too). When GATEWAY_USER/GATEWAY_PASSWORD are set, both must match
+// exactly; otherwise any username + any "ssh "-prefixed password is accepted.
+export function verifyLogin(username: string, password: string): boolean {
+  if (!username.trim() || !password.startsWith("ssh ")) return false;
+  if (config.gatewayUser && username !== config.gatewayUser) return false;
+  if (config.gatewayPassword && password !== config.gatewayPassword) return false;
+  return true;
+}
+
 // ----------------------------------------------------------------- tokens
 
 async function signAccess(deviceId: string): Promise<{ token: string; expiresAt: number }> {

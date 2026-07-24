@@ -1,6 +1,7 @@
 import { Router, type Response } from "express";
 import {
   chatSendRequestSchema,
+  loginRequestSchema,
   pairRequestSchema,
   refreshRequestSchema,
 } from "@hermes-mobile/shared";
@@ -10,6 +11,7 @@ import {
   requireAuth,
   rotateRefresh,
   revokeDevice,
+  verifyLogin,
   type AuthedRequest,
 } from "./auth.js";
 import { config } from "./config.js";
@@ -29,6 +31,18 @@ router.post("/auth/pair", async (req, res) => {
     return res.status(401).json({ error: "pairing token invalid or expired", code: "bad_pairing" });
   }
   res.json(await registerDevice(parsed.data.deviceName, parsed.data.platform));
+});
+
+router.post("/auth/login", async (req, res) => {
+  const parsed = loginRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "username and an 'ssh '-prefixed password are required", code: "bad_login_input" });
+  }
+  const { username, password, deviceName, platform } = parsed.data;
+  if (!verifyLogin(username, password)) {
+    return res.status(401).json({ error: "invalid username or password", code: "bad_login" });
+  }
+  res.json(await registerDevice(deviceName || username, platform));
 });
 
 router.post("/auth/refresh", async (req, res) => {

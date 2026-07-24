@@ -23,5 +23,10 @@ export const config = {
   jwtSecret: loadJwtSecret(),
   accessTtlSec: Number(process.env.ACCESS_TTL || 900),
   pushDriver: process.env.PUSH_DRIVER || "noop",
+  // Username/password login. When unset, any username with a password that
+  // begins with "ssh " is accepted (the prefix is the shared gate). Set both to
+  // pin an exact credential. GATEWAY_PASSWORD must itself start with "ssh ".
+  gatewayUser: process.env.GATEWAY_USER || "",
+  gatewayPassword: process.env.GATEWAY_PASSWORD || "",
   version: "0.1.0",
 };

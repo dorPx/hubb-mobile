@@ -9,9 +9,38 @@ type Weather = { temp: number; high: number; low: number; condition: string; win
 
 const WMO: Record<number, string> = { 0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 51: "Drizzle", 61: "Rain", 63: "Rain", 71: "Snow", 80: "Showers", 95: "Storm" };
 
-async function weatherFor(city: string, unit: "F" | "C"): Promise<Weather> {
+async function openWeather(city: string, unit: "F" | "C", key: string): Promise<Weather | null> {
+  try {
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&units=${unit === "F" ? "imperial" : "metric"}&appid=${encodeURIComponent(key)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(9_000) });
+    if (!res.ok) return null;
+    const d = (await res.json()) as {
+      main: { temp: number; temp_min: number; temp_max: number; humidity: number };
+      wind: { speed: number };
+      weather?: { main: string }[];
+    };
+    return {
+      temp: Math.round(d.main.temp),
+      high: Math.round(d.main.temp_max),
+      low: Math.round(d.main.temp_min),
+      condition: d.weather?.[0]?.main ?? "Current conditions",
+      wind: Math.round(d.wind.speed),
+      humidity: d.main.humidity,
+      live: true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function weatherFor(city: string, unit: "F" | "C", owmKey: string): Promise<Weather> {
   const fallback: Weather = { temp: unit === "F" ? 72 : 22, high: unit === "F" ? 76 : 24, low: unit === "F" ? 61 : 16, condition: "Clear", wind: unit === "F" ? 8 : 13, humidity: 48, live: false };
   if (!city.trim()) return fallback;
+  // Prefer OpenWeather when a key is set; fall back to keyless open-meteo.
+  if (owmKey.trim()) {
+    const owm = await openWeather(city, unit, owmKey.trim());
+    if (owm) return owm;
+  }
   try {
     const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en&format=json`, { signal: AbortSignal.timeout(8_000) });
     const place = ((await geo.json()) as { results?: { latitude: number; longitude: number }[] }).results?.[0];
@@ -47,9 +76,10 @@ export function BriefScreen() {
   const board = useHub((s) => s.board);
   const conversations = useHub((s) => s.conversations);
   const google = useHub((s) => s.google);
+  const owmKey = useHub((s) => s.owmKey);
   const credentials = useApp((s) => s.credentials);
   const navigate = useApp((s) => s.navigate);
-  const weather = useQuery({ queryKey: ["hub-weather", city, unit], queryFn: () => weatherFor(city, unit), staleTime: 15 * 60_000, retry: 0 });
+  const weather = useQuery({ queryKey: ["hub-weather", city, unit, owmKey], queryFn: () => weatherFor(city, unit, owmKey), staleTime: 15 * 60_000, retry: 0 });
   const googleLive = isGoogleLive(google);
   const gbrief = useQuery({
     queryKey: ["google-brief", google?.accessToken],

@@ -164,6 +164,8 @@ interface HubSnapshot {
   endpoints: Record<HubAgent, AgentEndpoint>;
   googleClientId: string;
   google: GoogleAccount | null;
+  owmKey: string;
+  newsApiKey: string;
 }
 
 const HUB_KEY = "hermes.hub.dispatch.v1";
@@ -222,6 +224,8 @@ const hubDefaults: HubSnapshot = {
   endpoints: emptyEndpoints(),
   googleClientId: "",
   google: null,
+  owmKey: "",
+  newsApiKey: "",
 };
 
 function cloneHubDefaults(): HubSnapshot {
@@ -259,6 +263,8 @@ interface HubState extends HubSnapshot {
   setAgentEndpoint: (agent: HubAgent, patch: Partial<AgentEndpoint>) => void;
   setGoogleClientId: (id: string) => void;
   setGoogleAccount: (account: GoogleAccount | null) => void;
+  setOwmKey: (key: string) => void;
+  setNewsApiKey: (key: string) => void;
   resetHub: () => void;
 }
 
@@ -282,6 +288,8 @@ export const useHub = create<HubState>((set, get) => {
       endpoints: state.endpoints,
       googleClientId: state.googleClientId,
       google: state.google,
+      owmKey: state.owmKey,
+      newsApiKey: state.newsApiKey,
     };
   };
   const update = (next: Partial<HubSnapshot>) => {
@@ -309,6 +317,8 @@ export const useHub = create<HubState>((set, get) => {
             endpoints: { ...emptyEndpoints(), ...saved.endpoints },
             googleClientId: typeof saved.googleClientId === "string" ? saved.googleClientId : "",
             google: saved.google ?? null,
+            owmKey: typeof saved.owmKey === "string" ? saved.owmKey : "",
+            newsApiKey: typeof saved.newsApiKey === "string" ? saved.newsApiKey : "",
             hubHydrated: true,
           });
           return;
@@ -354,6 +364,8 @@ export const useHub = create<HubState>((set, get) => {
       update({ endpoints: { ...get().endpoints, [agent]: { ...get().endpoints[agent], ...patch } } }),
     setGoogleClientId: (googleClientId) => update({ googleClientId }),
     setGoogleAccount: (google) => update({ google }),
+    setOwmKey: (owmKey) => update({ owmKey }),
+    setNewsApiKey: (newsApiKey) => update({ newsApiKey }),
     resetHub: () => {
       const fresh = cloneHubDefaults();
       set(fresh);

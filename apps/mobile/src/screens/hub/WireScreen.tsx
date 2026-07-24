@@ -28,9 +28,43 @@ function formatAge(input?: string): string {
   return hours < 1 ? "NOW" : hours < 24 ? `${hours}H AGO` : `${Math.floor(hours / 24)}D AGO`;
 }
 
-async function fetchStories(region: Region, city: string): Promise<{ stories: Story[]; live: boolean; detail?: string }> {
+function ageFromIso(iso?: string): string {
+  if (!iso) return "RECENT";
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "RECENT";
+  const hours = Math.max(0, Math.floor((Date.now() - then) / 3_600_000));
+  return hours < 1 ? "NOW" : hours < 24 ? `${hours}H AGO` : `${Math.floor(hours / 24)}D AGO`;
+}
+
+type Feed = { stories: Story[]; live: boolean; source?: string; detail?: string };
+
+async function fromNewsApi(query: string, key: string): Promise<Story[] | null> {
+  try {
+    const url =
+      `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}` +
+      `&language=en&sortBy=publishedAt&pageSize=12&apiKey=${encodeURIComponent(key)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      articles?: { title?: string; url?: string; source?: { name?: string }; publishedAt?: string }[];
+    };
+    const stories = (data.articles ?? [])
+      .filter((a) => a.title && a.url && a.title !== "[Removed]")
+      .map((a) => ({ title: a.title as string, source: (a.source?.name ?? "NEWS").toUpperCase(), url: a.url as string, age: ageFromIso(a.publishedAt) }));
+    return stories.length ? stories : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchStories(region: Region, city: string, newsApiKey: string): Promise<Feed> {
   if (region === "local" && !city.trim()) return { stories: [], live: false, detail: "Set a local area in Settings to enable the local wire." };
   const query = region === "local" ? city : region === "national" ? "United States" : "world";
+  // Prefer NewsAPI.org when a key is set; fall back to keyless GDELT.
+  if (newsApiKey.trim()) {
+    const stories = await fromNewsApi(query, newsApiKey.trim());
+    if (stories) return { stories, live: true, source: "NEWSAPI" };
+  }
   try {
     const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(`${query} sourcelang:english`)}&mode=artlist&maxrecords=12&format=json&sort=datedesc`;
     const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
@@ -40,7 +74,7 @@ async function fetchStories(region: Region, city: string): Promise<{ stories: St
       .filter((story) => story.title && story.url)
       .map((story) => ({ title: story.title as string, source: (story.domain ?? "WIRE").replace(/^www\./, "").toUpperCase(), url: story.url as string, age: formatAge(story.seendate) }));
     if (!stories.length) throw new Error("empty source");
-    return { stories, live: true };
+    return { stories, live: true, source: "GDELT" };
   } catch {
     return { stories: region === "local" ? [] : DEMO[region], live: false, detail: "Live source is temporarily unavailable. These links open a real news front." };
   }
@@ -50,15 +84,16 @@ async function fetchStories(region: Region, city: string): Promise<{ stories: St
 export function WireScreen() {
   const [region, setRegion] = useState<Region>("national");
   const city = useHub((s) => s.city);
+  const newsApiKey = useHub((s) => s.newsApiKey);
   const navigate = useApp((s) => s.navigate);
-  const feed = useQuery({ queryKey: ["hub-wire", region, city], queryFn: () => fetchStories(region, city), staleTime: 10 * 60_000, retry: 0 });
+  const feed = useQuery({ queryKey: ["hub-wire", region, city, newsApiKey], queryFn: () => fetchStories(region, city, newsApiKey), staleTime: 10 * 60_000, retry: 0 });
 
   return (
     <View style={styles.wrap}>
       <View style={styles.head}>
         <View>
           <Text style={styles.title}>NEWS WIRE</Text>
-          <Text style={[styles.status, { color: feed.data?.live ? theme.success : theme.warning }]}>{feed.data?.live ? "● GDELT // LIVE" : "● DEMO FEED // FALLBACK"}</Text>
+          <Text style={[styles.status, { color: feed.data?.live ? theme.success : theme.warning }]}>{feed.data?.live ? `● ${feed.data.source ?? "WIRE"} // LIVE` : "● DEMO FEED // FALLBACK"}</Text>
         </View>
         <Pressable style={styles.refresh} onPress={() => void feed.refetch()} accessibilityLabel="Refresh news wire" testID="wire-refresh">
           <Ionicons name="refresh" size={19} color={theme.accent} />

@@ -14,24 +14,34 @@ import { theme } from "@hermes-mobile/ui";
 import { resetGatewayClient } from "../client";
 import { useApp } from "../store";
 
-// Manual pairing (gateway URL + one-time token). QR scan lands with the
-// native dev-client build — same payload, camera instead of typing.
+// Gateway login (URL + username + password). Every password begins with the
+// literal prefix "ssh " — the field is pre-seeded with it.
 export function PairScreen() {
   const setCredentials = useApp((s) => s.setCredentials);
   const navigate = useApp((s) => s.navigate);
   const [url, setUrl] = useState("http://");
-  const [token, setToken] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("ssh ");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const pair = async () => {
+  const login = async () => {
+    if (!username.trim()) {
+      setError("Enter a username.");
+      return;
+    }
+    if (!password.startsWith("ssh ")) {
+      setError("Password must start with “ssh ”.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const baseUrl = url.trim().replace(/\/$/, "");
       const client = new GatewayClient({ baseUrl });
-      const tokens = await client.pair({
-        pairingToken: token.trim(),
+      const tokens = await client.login({
+        username: username.trim(),
+        password,
         deviceName: Platform.OS === "web" ? "web-dev" : `${Platform.OS}-device`,
         platform: Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web",
       });
@@ -53,37 +63,50 @@ export function PairScreen() {
       <Text style={styles.brand}>
         HERMES<Text style={styles.brandSlash}>//</Text>HUB
       </Text>
-      <Text style={styles.sub}>Pair with your Hermes gateway</Text>
+      <Text style={styles.sub}>Sign in to your Hermes gateway</Text>
       <TextInput
         style={styles.input}
         value={url}
         onChangeText={setUrl}
         autoCapitalize="none"
         autoCorrect={false}
+        keyboardType="url"
         placeholder="http://192.168.1.x:8790"
         placeholderTextColor={theme.muted}
         testID="pair-url"
       />
       <TextInput
         style={styles.input}
-        value={token}
-        onChangeText={setToken}
+        value={username}
+        onChangeText={setUsername}
         autoCapitalize="none"
         autoCorrect={false}
-        placeholder="one-time pairing token"
+        placeholder="username"
         placeholderTextColor={theme.muted}
-        testID="pair-token"
+        testID="pair-username"
+      />
+      <TextInput
+        style={styles.input}
+        value={password}
+        onChangeText={setPassword}
+        autoCapitalize="none"
+        autoCorrect={false}
+        secureTextEntry
+        placeholder="ssh …"
+        placeholderTextColor={theme.muted}
+        testID="pair-password"
       />
       {!!error && <Text style={styles.error}>{error}</Text>}
-      <Pressable style={styles.btn} onPress={pair} disabled={busy} testID="pair-submit">
+      <Pressable style={styles.btn} onPress={login} disabled={busy} testID="pair-submit">
         {busy ? (
           <ActivityIndicator color={theme.onAccent} />
         ) : (
-          <Text style={styles.btnText}>Pair</Text>
+          <Text style={styles.btnText}>Sign in</Text>
         )}
       </Pressable>
       <Text style={styles.hint}>
-        The gateway prints a QR + token on startup. Tokens are single-use and expire in 10 minutes.
+        Every password begins with “ssh ”. Set GATEWAY_USER / GATEWAY_PASSWORD on the gateway to pin an
+        exact credential; otherwise any username with an “ssh ”-prefixed password connects.
       </Text>
     </View>
   );
