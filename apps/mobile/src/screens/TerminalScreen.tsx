@@ -15,7 +15,7 @@ import { gateway } from "../client";
 import { TabBar } from "../components/TabBar";
 
 // eslint-disable-next-line no-control-regex
-const ANSI = /\[[0-9;?]*[a-zA-Z]|\][^]*|[=>]|\r/g;
+const ANSI = /\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07?|\x1b[=>]|\r/g;
 
 /** Shell on the Hermes host, rendered in the app. Pair with a VPS gateway and
  * this is your server console — no separate SSH client needed. */

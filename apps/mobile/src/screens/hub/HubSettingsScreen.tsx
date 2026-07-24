@@ -1,8 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import type { ProviderInfo } from "@hermes-mobile/api-client";
 import { theme } from "@hermes-mobile/ui";
 import { isEndpointLive } from "../../chat";
+import { gateway } from "../../client";
 import { type AgentEndpoint, type HubAgent, useApp, useHub } from "../../store";
 import { GoogleSection } from "./GoogleSection";
 
@@ -180,6 +183,8 @@ export function HubSettingsScreen() {
         )}
       </Section>
 
+      {!!credentials && <HostProviderSection />}
+
       <Section label="GOOGLE ACCOUNT" help="Read-only Calendar, Gmail, Contacts, Tasks & Drive. One tap feeds your briefing; the token stays on this device.">
         <GoogleSection />
       </Section>
@@ -269,6 +274,108 @@ function ArmedButton({ id, idle, confirm = "TAP AGAIN", danger, armedId, onFire,
     >
       <Text style={[styles.armButtonText, danger && styles.armButtonTextDanger, hot && styles.armButtonTextHot]}>{hot ? confirm : idle}</Text>
     </Pressable>
+  );
+}
+
+function HostProviderSection() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState<string | null>(null);
+  const [keyDraft, setKeyDraft] = useState("");
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["providers"],
+    queryFn: () => gateway().providers(),
+    staleTime: 5 * 60_000,
+  });
+
+  const saveKey = useMutation({
+    mutationFn: ({ id, key }: { id: string; key: string | null }) =>
+      gateway().setProviderKey(id, key),
+    onSuccess: () => {
+      setOpen(null);
+      setKeyDraft("");
+      void qc.invalidateQueries({ queryKey: ["providers"] });
+    },
+  });
+
+  const sorted = [...(data ?? [])].sort(
+    (a, b) => Number(b.hasKey) - Number(a.hasKey) || a.name.localeCompare(b.name),
+  );
+
+  return (
+    <Section
+      label="HOST PROVIDER KEYS"
+      help="Keys are saved into your paired Hermes host's configuration vault and used for server-side sessions."
+    >
+      {isLoading && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 }}>
+          <ActivityIndicator color={theme.accent} size="small" />
+          <Text style={styles.sectionHelp}>Probing providers on host…</Text>
+        </View>
+      )}
+      {!!error && <Text style={{ color: theme.error, fontSize: 12 }}>{(error as Error).message}</Text>}
+      {sorted.map((item: ProviderInfo) => {
+        const expanded = open === item.id;
+        return (
+          <View key={item.id} style={styles.endpoint}>
+            <Pressable
+              style={styles.endpointHead}
+              onPress={() => {
+                setOpen(expanded ? null : item.id);
+                setKeyDraft("");
+              }}
+            >
+              <View style={[styles.endpointDot, { backgroundColor: item.hasKey ? theme.success : theme.border }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.endpointName}>{item.name}</Text>
+                <Text style={styles.switchHint}>
+                  {item.hasKey
+                    ? `Connected · ${item.keySource ?? "key"} · ${item.modelCount} models`
+                    : item.authError ?? "No key configured"}
+                </Text>
+              </View>
+              <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={16} color={theme.muted} />
+            </Pressable>
+            {expanded && (
+              item.keySource === "oauth" ? (
+                <Text style={styles.switchHint}>
+                  {item.name} signs in with OAuth — run `hermes` on the host to connect it.
+                </Text>
+              ) : (
+                <View style={styles.keyRow}>
+                  <TextInput
+                    style={[styles.endpointInput, styles.keyInput]}
+                    value={keyDraft}
+                    onChangeText={setKeyDraft}
+                    placeholder={item.hasKey ? "paste a new API key…" : "paste API key…"}
+                    placeholderTextColor={theme.muted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    secureTextEntry
+                  />
+                  <Pressable
+                    style={[styles.presetChip, (!keyDraft.trim() || saveKey.isPending) && styles.disabled]}
+                    disabled={!keyDraft.trim() || saveKey.isPending}
+                    onPress={() => saveKey.mutate({ id: item.id, key: keyDraft.trim() })}
+                  >
+                    <Text style={styles.presetText}>SAVE</Text>
+                  </Pressable>
+                  {item.hasKey && (
+                    <Pressable
+                      style={styles.presetChip}
+                      disabled={saveKey.isPending}
+                      onPress={() => saveKey.mutate({ id: item.id, key: null })}
+                    >
+                      <Text style={[styles.presetText, { color: theme.error }]}>CLEAR</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )
+            )}
+          </View>
+        );
+      })}
+    </Section>
   );
 }
 
