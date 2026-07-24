@@ -54,6 +54,7 @@ export function CommsScreen() {
   const endpoint = useHub((s) => s.endpoints[s.selectedAgent]);
   const [draft, setDraft] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [streamAgent, setStreamAgent] = useState<HubAgent | null>(null);
   const [partial, setPartial] = useState("");
   const list = useRef<ScrollView>(null);
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,6 +84,7 @@ export function CommsScreen() {
     const userMsg = { id: `u-${Date.now()}`, role: "user" as const, text, createdAt: Date.now() };
     append(selectedAgent, userMsg);
     setStreaming(true);
+    setStreamAgent(selectedAgent);
     const swarm = selectedAgent === "hermes" && moaArmed;
 
     // Live path: any agent with a configured OpenAI-compatible endpoint (MoA stays demo).
@@ -102,6 +104,7 @@ export function CommsScreen() {
             createdAt: Date.now(),
           });
           setStreaming(false);
+          setStreamAgent(null);
           setPartial("");
           abort.current = null;
         },
@@ -119,6 +122,7 @@ export function CommsScreen() {
         swarm,
       });
       setStreaming(false);
+      setStreamAgent(null);
       pending.current = null;
     }, swarm ? 950 : 650);
   };
@@ -207,7 +211,7 @@ export function CommsScreen() {
             <Text style={[styles.messageText, message.role === "user" && styles.userText]}>{message.text}</Text>
           </View>
         ))}
-        {streaming && (
+        {streaming && streamAgent === selectedAgent && (
           <View style={styles.message}>
             {moaArmed && <Text style={styles.traceTitle}>SWARM TRACE — FUSING PROPOSALS…</Text>}
             {partial ? (

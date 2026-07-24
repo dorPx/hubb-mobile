@@ -10,6 +10,17 @@ export function isEndpointLive(e: AgentEndpoint | undefined): boolean {
   return !!(e && e.baseUrl.trim() && e.apiKey.trim() && e.model.trim());
 }
 
+function jsonCompletion(raw: string, onToken?: (t: string) => void): ChatResult {
+  try {
+    const j = JSON.parse(raw) as { choices?: { message?: { content?: string } }[] };
+    const text = j.choices?.[0]?.message?.content ?? "";
+    if (text) onToken?.(text);
+    return { text };
+  } catch {
+    return { text: "", error: "Unrecognized response from endpoint." };
+  }
+}
+
 function parseSseDeltas(chunk: string, onToken?: (t: string) => void): string {
   let out = "";
   for (const line of chunk.split("\n")) {
@@ -67,24 +78,29 @@ export async function runChat(
       return { text: "", error: detail };
     }
 
-    // Web: incremental reader. Native RN fetch usually lacks getReader.
+    // Web: incremental reader. Native RN global fetch lacks getReader → text path.
     const body = res.body as (ReadableStream<Uint8Array> & { getReader?: () => ReadableStreamDefaultReader<Uint8Array> }) | null;
     if (onToken && body?.getReader) {
       const reader = body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
       let full = "";
+      let rawAll = "";
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        buf += decoder.decode(value, { stream: true });
+        const piece = decoder.decode(value, { stream: true });
+        rawAll += piece;
+        buf += piece;
         const frames = buf.split("\n\n");
         buf = frames.pop() ?? "";
         for (const frame of frames) full += parseSseDeltas(frame, onToken);
       }
       if (buf) full += parseSseDeltas(buf, onToken);
       if (full) return { text: full };
-      // Server ignored `stream` and returned JSON — reparse below.
+      // The reader already drained the body; parse the captured text instead of
+      // calling res.text() again (which would throw "body already read").
+      return jsonCompletion(rawAll, onToken);
     }
 
     const raw = await res.text();
@@ -93,14 +109,7 @@ export async function runChat(
       const full = parseSseDeltas(raw, onToken);
       if (full) return { text: full };
     }
-    try {
-      const j = JSON.parse(raw) as { choices?: { message?: { content?: string } }[] };
-      const text = j.choices?.[0]?.message?.content ?? "";
-      if (text) onToken?.(text);
-      return { text };
-    } catch {
-      return { text: "", error: "Unrecognized response from endpoint." };
-    }
+    return jsonCompletion(raw, onToken);
   } catch (e) {
     const err = e as Error;
     if (err.name === "AbortError") return { text: "", error: "aborted" };

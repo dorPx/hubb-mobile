@@ -250,6 +250,7 @@ interface HubState extends HubSnapshot {
   appendHubMessage: (agent: HubAgent, message: HubMessage) => void;
   clearHubConversation: (agent: HubAgent) => void;
   addBoardTask: (title: string, lane?: BoardLane) => void;
+  editBoardTask: (id: string, title: string) => void;
   moveBoardTask: (id: string, lane: BoardLane) => void;
   removeBoardTask: (id: string) => void;
   resetBoard: () => void;
@@ -335,6 +336,11 @@ export const useHub = create<HubState>((set, get) => {
         .filter((n) => Number.isFinite(n));
       const id = `OPS-${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(3, "0")}`;
       update({ board: [...get().board, { id, title: trimmed, lane, createdAt: Date.now() }] });
+    },
+    editBoardTask: (id, title) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
+      update({ board: get().board.map((task) => (task.id === id ? { ...task, title: trimmed } : task)) });
     },
     moveBoardTask: (id, lane) => update({ board: get().board.map((task) => (task.id === id ? { ...task, lane } : task)) }),
     removeBoardTask: (id) => update({ board: get().board.filter((task) => task.id !== id) }),

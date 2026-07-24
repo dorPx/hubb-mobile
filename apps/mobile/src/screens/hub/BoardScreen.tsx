@@ -19,6 +19,7 @@ function age(createdAt: number): string {
 export function BoardScreen() {
   const board = useHub((s) => s.board);
   const add = useHub((s) => s.addBoardTask);
+  const edit = useHub((s) => s.editBoardTask);
   const move = useHub((s) => s.moveBoardTask);
   const remove = useHub((s) => s.removeBoardTask);
   const [newTitle, setNewTitle] = useState("");
@@ -45,12 +46,8 @@ export function BoardScreen() {
   const save = () => {
     if (!selected) return;
     const next = draft.trim();
-    if (next && next !== selected.title) {
-      // Re-create with the edited title while retaining its board lane; the
-      // state action deliberately remains small and deterministic offline.
-      remove(selected.id);
-      add(next, selected.lane);
-    }
+    // Edit in place — keeps the task's id, lane, and age intact.
+    if (next && next !== selected.title) edit(selected.id, next);
     setSelected(null);
   };
 
